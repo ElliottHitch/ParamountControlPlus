@@ -1,8 +1,7 @@
 // Adapted stream telemetry from Paramount Quality+ (ISC). See NOTICE.md.
 // Read original requests only; never infer a selectable rendition from a URL.
-import { extractResolutionFromPath } from './url-utils.js';
 import { getRepresentations } from './state.js';
-import { classifyMediaRequest, deriveStreamKey } from './stream-model.js';
+import { classifyMediaRequest } from './stream-model.js';
 
 function positiveNumber(value) {
   const number = Number(value);
@@ -14,8 +13,8 @@ export function analyzeUrl(url, { observationSequence } = {}) {
     const request = classifyMediaRequest(url);
     if (request.kind !== 'segment' || request.excluded || request.isInitialization) return;
     const pathname = request.url.pathname;
-    const representations = getRepresentations().flatMap(rep => rep.variants || [rep]);
-    const pathResolution = extractResolutionFromPath(pathname);
+    const representations = getRepresentations();
+    const pathResolution = pathname.match(/_(\d{3,4}p)_/)?.[1] || null;
     const dashTier = pathname.match(/_(\d{2,6})\/(?:seg_|init)/i)?.[1];
     const hlsTier = pathname.match(/manifest(?:_video)?_(\d+)[_\/]/i)?.[1];
     const directoryMatches = representations.filter(rep =>
@@ -49,7 +48,7 @@ export function analyzeUrl(url, { observationSequence } = {}) {
     if (!resolution && !bitrate) return;
     window.postMessage({ type: 'PMR_QUALITY_DATA', payload: {
       resolution, bitrate, bitrateSource, isEstimated,
-      streamKey: deriveStreamKey(request.url), observationSequence, timestamp: Date.now()
+      observationSequence, timestamp: Date.now()
     } }, location.origin);
   } catch { /* Telemetry failure must leave playback unchanged. */ }
 }

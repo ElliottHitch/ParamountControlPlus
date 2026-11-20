@@ -2,8 +2,8 @@
 // Google serves complete programs through this otherwise ad-associated host.
 // The hostname alone cannot distinguish these manifests from advertisements.
 export function isProgramManifest(url) {
-    return url.protocol === 'https:' && url.hostname === 'pubads.g.doubleclick.net' &&
-        /^\/ondemand\/(?:hls|dash)\/content\/[^/]+\/vid\/[^/]+\/[a-z0-9_-]+\/streams\/[^/]+\/(?:[^/]+\/)*(?:[^/]+\.(?:m3u8|mpd))$/i.test(url.pathname);
+  return url.protocol === 'https:' && url.hostname === 'pubads.g.doubleclick.net' &&
+    /^\/ondemand\/(?:hls|dash)\/content\/[^/]+\/vid\/[^/]+\/[a-z0-9_-]+\/streams\/[^/]+\/(?:[^/]+\/)*(?:[^/]+\.(?:m3u8|mpd))$/i.test(url.pathname);
 }
 
 const DAI_VARIANT_PATTERN = /\/variant\/([^/]+)\/bandwidth\/(\d+)\.m3u8/i;
@@ -67,17 +67,12 @@ export function classifyMediaRequest(url) {
   const isAudio = cmcd.ot === 'a' || isExcludedReference(lower);
   const isDaiPlaylist = DAI_VARIANT_PATTERN.test(urlObj.pathname);
   const isAd = !isDaiPlaylist && !isProgramManifest(urlObj) && isAdReference(lower);
-  const isManifest = /\.(?:mpd|m3u8)(?:$|\?)/i.test(urlObj.toString());
-  const isSegment = /\.(?:m4s|m4v|mp4|ts)(?:$|\?)/i.test(urlObj.toString());
+  const isManifest = /\.(?:mpd|m3u8)$/i.test(urlObj.pathname);
+  const isSegment = /\.(?:m4s|m4v|mp4|ts)$/i.test(urlObj.pathname);
   // Stitched Google DAI segments can contain ads, so omit them from telemetry.
   const isGoogleDaiMedia = urlObj.hostname.toLowerCase() === 'dai.google.com' && isSegment;
   const filename = urlObj.pathname.slice(urlObj.pathname.lastIndexOf('/') + 1);
   const isInitialization = /(?:^|[_-])init(?:[_-][^.]*)?\.(?:m4s|m4v|mp4)$/i.test(filename);
-  const isLive = cmcd.st === 'l' || isGoogleDaiMedia ||
-    /\/out\/v1\/|\/linear\/hls\/pa\/event\//i.test(urlObj.pathname) ||
-    // Google DAI media segments are served from a different CDN than the
-    // event playlist and frequently omit CMCD's `st=l` marker.
-    /\/index-[^/]*video=\d+-\d+\.(?:ts|m4s|mp4)$/i.test(urlObj.pathname);
 
   return {
     url: urlObj,
@@ -86,14 +81,11 @@ export function classifyMediaRequest(url) {
     excluded: isAudio || isAd || isGoogleDaiMedia,
     isAd,
     isAudio,
-    isInitialization,
-    isLive,
-    isDaiPlaylist,
-    isGoogleDaiMedia
+    isInitialization
   };
 }
 
-export function deriveStreamKey(url, family = 'unknown') {
+export function deriveStreamKey(url) {
   const urlObj = url instanceof URL ? url : toUrl(url);
   if (!urlObj) return null;
 
@@ -117,28 +109,4 @@ export function deriveStreamKey(url, family = 'unknown') {
 export function resolveVariantUrl(variantUrl, manifestUrl) {
   if (!variantUrl) return null;
   return toUrl(variantUrl, manifestUrl || window.location.href)?.toString() || variantUrl;
-}
-
-export function getDeliveryFamily({ variantUrl, hlsTier, template, pathId, rawId } = {}) {
-  if (variantUrl && DAI_VARIANT_PATTERN.test(variantUrl)) return 'google-dai-hls';
-  if (variantUrl || hlsTier) return hlsTier ? 'tiered-hls' : 'hls';
-  if (template || pathId || rawId) return 'dash';
-  return 'unknown';
-}
-
-export function normalizeRepresentations(representations, context = {}) {
-  return representations
-    .map(rep => {
-      const family = rep.family || getDeliveryFamily(rep);
-      const streamKey = rep.streamKey || context.streamKey || deriveStreamKey(context.manifestUrl, family);
-      return {
-        ...rep,
-        family,
-        streamKey,
-        mediaType: rep.mediaType || 'video',
-        source: rep.source || 'manifest'
-      };
-    })
-    .filter(rep => rep.mediaType === 'video')
-    .sort((a, b) => (b.height || 0) - (a.height || 0) || (b.bandwidth || 0) - (a.bandwidth || 0));
 }

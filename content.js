@@ -51,7 +51,7 @@
       return;
     }
     removeTargetElements();
-    observer.observe(document.documentElement, {
+    observer.observe(document, {
       attributes: true,
       attributeFilter: ["class"],
       childList: true,
@@ -60,8 +60,7 @@
   }
 
   chrome.storage.local.get({ removeMenu: true }, (settings) => {
-    if (document.documentElement) applyMenuPreference(settings.removeMenu);
-    else document.addEventListener("DOMContentLoaded", () => applyMenuPreference(settings.removeMenu), { once: true });
+    applyMenuPreference(settings.removeMenu);
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes.removeMenu) applyMenuPreference(changes.removeMenu.newValue);

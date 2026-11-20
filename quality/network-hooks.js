@@ -1,9 +1,7 @@
 // Local transport hooks. Observe original requests and select manifest choices only.
-import { getConfig, getStreamSession } from './state.js';
+import { getConfig, getStreamKey } from './state.js';
 import { classifyMediaRequest } from './stream-model.js';
-import { isManifestUrl } from './url-utils.js';
 import { createRecoveryController } from './recovery-controller.js';
-import { diagnosticNow, recordDiagnosticEvent, recordRequestAttempt } from './diagnostics.js';
 
 export function initNetworkHooks({ analyzeUrl, parseManifest }) {
   const originalFetch = window.fetch;
@@ -15,20 +13,19 @@ export function initNetworkHooks({ analyzeUrl, parseManifest }) {
   let observationSequence = 0;
   let activeStreamKey = null;
   const recovery = createRecoveryController({
-    recordDiagnosticEvent,
-    postRecovery: payload => window.postMessage({ type: 'PMR_QUALITY_ORIGINAL_STREAM_RECOVERY', payload }, location.origin)
+    postRecovery: () => window.postMessage({ type: 'PMR_QUALITY_ORIGINAL_STREAM_RECOVERY' }, location.origin)
   });
 
   function manifestResponse(url, contentType) {
     const request = classifyMediaRequest(url);
     return !request.isAd && !request.isAudio &&
-      (isManifestUrl(url) || /dash\+xml|mpegurl/i.test(contentType || ''));
+      (request.kind === 'manifest' || /dash\+xml|mpegurl/i.test(contentType || ''));
   }
 
   function selectManifest(text, url, config = getConfig()) {
     const result = parseManifest(text, url, config);
     if (!result.selection) return result;
-    const streamKey = getStreamSession().key;
+    const streamKey = getStreamKey();
     if (streamKey && streamKey !== activeStreamKey) {
       activeStreamKey = streamKey;
       recovery.reset();
@@ -45,7 +42,7 @@ export function initNetworkHooks({ analyzeUrl, parseManifest }) {
   function inspectFailure(url, status) {
     const request = classifyMediaRequest(url);
     if (request.kind === 'segment' && !request.isAd && !request.isAudio &&
-      [400, 403, 404, 410, 416].includes(status)) recovery.requestRecovery(`media-http-${status}`);
+      [400, 403, 404, 410, 416].includes(status)) recovery.requestRecovery();
   }
 
   function preserveResponseMetadata(response, original) {
@@ -80,27 +77,19 @@ export function initNetworkHooks({ analyzeUrl, parseManifest }) {
       recovery.markApplied();
       reportPolicy(result, config);
       return selected;
-    } catch (error) {
-      recordDiagnosticEvent('manifest_selection_error', { errorName: error?.name || 'Error' });
+    } catch {
       return response;
     }
   }
 
   window.fetch = async function (...args) {
     const sequence = ++observationSequence;
-    const startedAt = diagnosticNow();
     // The resource, method, headers, body, credentials and abort signal stay native.
     const response = await originalFetch.apply(this, args);
     try {
       const resource = args[0];
       const url = response.url || (typeof resource === 'string' ? resource : resource?.url || String(resource));
-      const request = classifyMediaRequest(url);
       const method = String(args[1]?.method || resource?.method || 'GET').toUpperCase();
-      if (request.kind !== 'unknown') recordRequestAttempt({
-        transport: 'fetch', category: request.kind, url, method, status: response.status,
-        ok: response.ok, outcome: response.ok ? 'success' : 'http-error',
-        durationMs: diagnosticNow() - startedAt
-      });
       if (response.ok) analyzeUrl(url, { observationSequence: sequence });
       return method === 'GET' ? await inspectFetch(response, url) : response;
     } catch { return response; }
@@ -149,19 +138,13 @@ export function initNetworkHooks({ analyzeUrl, parseManifest }) {
   function inspectXhr() {
     try {
       const state = xhrStates.get(this);
-      if (!state || this.readyState !== 4 || state.recorded) return;
-      state.recorded = true;
+      if (!state || this.readyState !== 4 || state.inspected) return;
+      state.inspected = true;
       const succeeded = this.status >= 200 && this.status < 300;
       const url = this.responseURL || state.url;
-      const request = classifyMediaRequest(url);
-      if (request.kind !== 'unknown') recordRequestAttempt({
-        transport: 'xhr', category: request.kind, url, method: state.method,
-        status: this.status, ok: succeeded, outcome: succeeded ? 'success' : 'http-error',
-        durationMs: diagnosticNow() - state.startedAt
-      });
       if (!succeeded) { inspectFailure(url, this.status); return; }
       analyzeUrl(url, { observationSequence: state.sequence });
-    } catch { /* Diagnostics must not affect the player's listeners. */ }
+    } catch { /* Preserve native event delivery. */ }
   }
 
   XMLHttpRequest.prototype.open = function (method, url, ...rest) {
@@ -170,7 +153,7 @@ export function initNetworkHooks({ analyzeUrl, parseManifest }) {
     const result = originalOpen.apply(this, [method, url, ...rest]);
     try {
       xhrStates.set(this, { url: String(url), method: String(method).toUpperCase(),
-        startedAt: diagnosticNow(), sequence: ++observationSequence, recorded: false, values: new Map() });
+        sequence: ++observationSequence, inspected: false, values: new Map() });
       if (!observedXhrs.has(this)) {
         observedXhrs.add(this);
         const keys = Object.keys(descriptors);
@@ -197,13 +180,13 @@ export function initNetworkHooks({ analyzeUrl, parseManifest }) {
   document.addEventListener('error', event => {
     const video = event.target;
     if (video?.tagName === 'VIDEO' && video.error?.code >= 2) {
-      recovery.requestRecovery(`video-error-${video.error.code}`);
+      recovery.requestRecovery();
     }
   }, true);
   window.addEventListener('message', event => {
     if (event.source !== window || event.origin !== location.origin || event.data?.type !== 'PMR_QUALITY_BUFFER_ERROR') return;
     const sourceUrl = event.data.payload?.sourceUrl;
     if (typeof sourceUrl === 'string' && Array.from(document.querySelectorAll('video')).some(video =>
-      (video.currentSrc || video.src) === sourceUrl)) recovery.requestRecovery('video-buffer-error');
+      (video.currentSrc || video.src) === sourceUrl)) recovery.requestRecovery();
   });
 }

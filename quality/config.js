@@ -1,6 +1,5 @@
 // Adapted from Paramount Quality+ (ISC). See NOTICE.md.
 import { normalizeConfig, setConfig } from './state.js';
-import { recordPlaybackCheckpoint } from './diagnostics.js';
 
 export const PENDING_CONFIG_KEY = 'pmrQualityPendingQualityConfig';
 
@@ -15,13 +14,8 @@ export function consumePendingConfig(storage = null) {
     if (!config || typeof config !== 'object') return null;
     const normalized = normalizeConfig(config);
     setConfig(normalized);
-    recordPlaybackCheckpoint('configuration_restored', {
-      forceMax: normalized.forceMax,
-      hasManualSelection: Boolean(normalized.forcedHeight)
-    });
     return normalized;
-  } catch (error) {
-    console.warn('[PMR_QUALITY] Unable to restore pending quality configuration.', error);
+  } catch {
     return null;
   }
 }
@@ -33,12 +27,7 @@ export function initConfigListener() {
   window.addEventListener('message', (event) => {
     if (event.source === window && event.origin === location.origin && event.data?.type === 'PMR_QUALITY_CONFIG' &&
         event.data.payload && typeof event.data.payload === 'object') {
-      const config = normalizeConfig(event.data.payload);
-      setConfig(config);
-      recordPlaybackCheckpoint('configuration_applied', {
-        forceMax: config.forceMax,
-        hasManualSelection: Boolean(config.forcedHeight)
-      });
+      setConfig(event.data.payload);
     }
   });
 }

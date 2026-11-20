@@ -1,35 +1,41 @@
 # Paramount Control+
 
-A Chrome and Edge extension for Paramount+.
+Paramount Control+ is an unofficial extension for the Paramount+ website in desktop Chrome and Microsoft Edge. It can hide the playback sidebar, select among the video qualities a title offers, and show the current resolution and bitrate.
 
-## What it does
+## Install on Windows
 
-### 1. Menu removal
+1. On this repository’s GitHub page, select **Code → Download ZIP**.
+2. Right-click the downloaded ZIP and choose **Extract All**. Keep the extracted folder somewhere permanent. The browser loads the extension from that folder.
+3. In Chrome, open `chrome://extensions`. In Edge, open `edge://extensions`. Turn on **Developer mode**.
+4. Select **Load unpacked** and choose the folder that directly contains `manifest.json`.
+5. Refresh any open Paramount+ tabs. Start a video, then open **Paramount Control+** from the browser’s **Extensions** menu.
 
-  Removes the video sidebar when it appears. Turn the switch off to bring the menu back.
+Installation requires Chrome or Edge 111 or later and permission to load unpacked extensions. On a managed PC, your organization controls that permission.
 
-### 2. Quality selection
+## Playback controls
 
-Paramount lists the qualities available for each video. The extension limits
-which ones the player can choose. The player still downloads and plays the original streams.
+**Hide playback menu** hides the sidebar by default. Turn it off to restore the sidebar. **Dark mode** changes the popup’s appearance.
 
-  - **Auto:** lets the player choose from the full list.
-  - **Keep sharp:** keeps the highest compatible choices.
-  - **Manual:** keeps your chosen resolution and the closest available bitrate, where supported.
+| Quality preference | How the player chooses video |
+| --- | --- |
+| **Auto** (default) | Paramount+ adjusts quality to your connection. |
+| **Keep sharp** | Keeps the highest compatible resolution and bitrate in each group of video tracks. |
+| **Manual** | Uses the selected resolution and the closest offered bitrate. If that resolution is unavailable, the player keeps its original choices. |
 
-Settings are saved automatically. Changing quality reloads the player. If playback
-fails after a quality selection, it reloads once into Auto and stays there for the current title.
-Only qualities offered by Paramount are available.
+Changing quality reloads active playback. If playback fails after the extension narrows the available choices, it can reload once in Auto for that title. The popup labels bitrate values reported by the stream, advertised in the playlist, or estimated from recent video segments.
 
-The popup also shows the current resolution and bitrate and includes dark mode.
+## Privacy and permissions
 
-## Install
+The extension runs on the HTTPS versions of `www.paramountplus.com` and `paramountplus.com`. Its `storage` permission saves your sidebar, appearance, and quality preferences in your browser profile.
 
-1. Open `chrome://extensions` or `edge://extensions`.
-2. Turn on **Developer mode**, click **Load unpacked**, and select this folder. If already installed, click **Reload** to update it.
-3. Refresh Paramount+.
-4. Open the popup from the toolbar icon or the Edge app's **… → Extensions** menu.
+Playback analysis happens in the tab using requests the player already makes. The popup receives resolution and bitrate information. The tab uses session storage to carry the quality setting across reloads. After a playback failure, it stores a fingerprint of the page address alongside the setting to prevent repeated reloads. The extension keeps this information on your device.
 
-[Quality engine attribution and license](quality/NOTICE.md).
+## Update or remove
 
-Unofficial extension; not affiliated with Paramount+.
+To update, extract the new ZIP and replace the extension files in the same folder. Open the browser’s extensions page, click **Reload** on **Paramount Control+**, and refresh your Paramount+ tabs.
+
+To uninstall, click **Remove** on the extension’s card. You can then delete the extracted folder.
+
+## Attribution
+
+Parts of the quality engine are adapted from Paramount Quality+ under the ISC license. [Third-party notice and license](quality/NOTICE.md)
